@@ -1,0 +1,35 @@
+{
+  "name": "formready-india",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "next": "^15.1.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "clsx": "^2.1.1",
+    "tailwind-merge": "^2.6.0",
+    "lucide-react": "^0.469.0",
+    "browser-image-compression": "^2.0.2",
+    "jspdf": "^2.5.2",
+    "pdfjs-dist": "^4.9.155",
+    "pdf-lib": "^1.17.1",
+    "next-intl": "^3.26.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "^15.1.0",
+    "tailwindcss": "^4",
+    "typescript": "^5",
+    "@tailwindcss/postcss": "^4"
+  }
+}

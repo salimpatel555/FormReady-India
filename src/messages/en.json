@@ -1,0 +1,63 @@
+{
+  "common": {
+    "siteName": "FormReady India",
+    "tagline": "Free Photo & Signature Tools for Government Exams",
+    "home": "Home",
+    "allTools": "All Tools",
+    "about": "About",
+    "contact": "Contact",
+    "privacy": "Privacy Policy",
+    "terms": "Terms & Conditions",
+    "disclaimer": "Disclaimer",
+    "examPrep": "Exam Prep",
+    "useTool": "Use tool",
+    "openTool": "Open tool",
+    "download": "Download",
+    "upload": "Upload",
+    "processing": "Processing…",
+    "preview": "Preview",
+    "clear": "Clear",
+    "language": "Language"
+  },
+  "home": {
+    "badge": "100% Browser-based • No server uploads",
+    "title": "Prepare Photos & Signatures for",
+    "titleHighlight": "Government Exams",
+    "subtitle": "Free tools to resize photos, signatures and compress images for SSC, UPSC, MPSC, banking, railway and police recruitment applications. Everything runs locally in your browser for complete privacy.",
+    "ctaPrimary": "Resize Photo Now",
+    "ctaSecondary": "Browse All Tools",
+    "privacyTitle": "Privacy First",
+    "privacyDesc": "Images never leave your device. Processed entirely in the browser.",
+    "fastTitle": "Instant Results",
+    "fastDesc": "No waiting for uploads or server processing. Get results immediately.",
+    "mobileTitle": "Works on Mobile",
+    "mobileDesc": "Fully responsive. Prepare documents from your phone or computer.",
+    "popularTools": "Popular Tools",
+    "popularSubtitle": "Start with the tools most used by exam aspirants",
+    "viewAll": "View all tools →",
+    "examHelpers": "Exam-Specific Helpers",
+    "examHelpersSubtitle": "Quick starting points for common applications. Always double-check the latest official notification for exact requirements.",
+    "howItWorks": "How It Works",
+    "step1Title": "Upload your image",
+    "step1Desc": "Drag & drop or select a photo or signature from your device. Supported: JPG, PNG, WebP.",
+    "step2Title": "Set dimensions or size",
+    "step2Desc": "Enter the exact width, height or target file size required by the application form.",
+    "step3Title": "Download the result",
+    "step3Desc": "Preview, then download the processed image. Ready to upload to the exam portal.",
+    "ctaBottomTitle": "Ready to prepare your application photos?",
+    "ctaBottomSubtitle": "Free, private, and designed for Indian government exam aspirants.",
+    "ctaBottomButton": "Start with Photo Resizer"
+  },
+  "tools": {
+    "title": "All Tools",
+    "subtitle": "Free, privacy-focused tools to prepare documents for government job applications and competitive exams in India."
+  },
+  "footer": {
+    "description": "Free online tools to prepare photos, signatures and documents for Indian government job applications and competitive exams. All processing happens in your browser.",
+    "popularTools": "Popular Tools",
+    "examPrep": "Exam Prep",
+    "legal": "Legal",
+    "copyright": "All rights reserved. Images are processed locally in your browser and are never uploaded to our servers.",
+    "verifyNote": "Always verify photo and signature requirements with the latest official exam notifications."
+  }
+}

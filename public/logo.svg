@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none" role="img" aria-label="FormReady India">
+  <defs>
+    <linearGradient id="g" x1="8" y1="6" x2="56" y2="58" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#4F46E5"/>
+      <stop offset="0.55" stop-color="#7C3AED"/>
+      <stop offset="1" stop-color="#DB2777"/>
+    </linearGradient>
+    <linearGradient id="g2" x1="22" y1="18" x2="48" y2="48" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF" stop-opacity="0.95"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0.85"/>
+    </linearGradient>
+  </defs>
+  <!-- Rounded square mark -->
+  <rect x="4" y="4" width="56" height="56" rx="16" fill="url(#g)"/>
+  <!-- Document shape -->
+  <path d="M20 16h18l10 10v22a4 4 0 0 1-4 4H20a4 4 0 0 1-4-4V20a4 4 0 0 1 4-4z" fill="url(#g2)"/>
+  <!-- Fold corner -->
+  <path d="M38 16v8a2 2 0 0 0 2 2h8L38 16z" fill="#E0E7FF" fill-opacity="0.9"/>
+  <!-- Checklist lines -->
+  <path d="M24 34h16M24 40h12" stroke="#4F46E5" stroke-width="2.2" stroke-linecap="round"/>
+  <!-- Check mark -->
+  <path d="M24 28.5l2.8 2.8 5.2-5.5" stroke="#7C3AED" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
