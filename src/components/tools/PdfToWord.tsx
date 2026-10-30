@@ -6,46 +6,71 @@ import { useToast } from "@/components/ui/Toast";
 import { Loader } from "@/components/ui/Loader";
 import { downloadBlob, formatBytes } from "@/lib/utils";
 
+
 async function extractPdfText(file: File): Promise<string> {
   const pdfjs = await import("pdfjs-dist");
-  pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
+
+  // Load PDF.js worker locally instead of CDN
+  pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+    "pdfjs-dist/build/pdf.worker.min.mjs",
+    import.meta.url
+  ).toString();
+
   const data = new Uint8Array(await file.arrayBuffer());
+
   const pdf = await pdfjs.getDocument({ data }).promise;
+
   const parts: string[] = [];
+
   for (let i = 1; i <= pdf.numPages; i++) {
     const page = await pdf.getPage(i);
     const content = await page.getTextContent();
+
     const line = content.items
       .map((item) => ("str" in item ? item.str : ""))
       .join(" ");
+
     parts.push(line.trim());
   }
+
   return parts.filter(Boolean).join("\n\n");
 }
 
+
+
 function textToWordHtml(text: string, title: string) {
-  const escaped = text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/\n/g, "<br/>");
+  const escapeHtml = (value: string) =>
+    value
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+
+  const escaped = escapeHtml(text).replace(/\n/g, "<br/>");
+  const safeTitle = escapeHtml(title);
+
   return `<!DOCTYPE html>
-<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word">
-<head>
-<meta charset="utf-8"/>
-<title>${title.replace(/</g, "")}</title>
-<!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View></w:WordDocument></xml><![endif]-->
-<style>
-  body { font-family: Calibri, Arial, sans-serif; font-size: 12pt; line-height: 1.5; }
+  <html xmlns:o="urn:schemas-microsoft-com:office:office"
+  xmlns:w="urn:schemas-microsoft-com:office:word">
+  <head>
+  <meta charset="utf-8"/>
+  <title>${safeTitle}</title>
+  <style>
+  body {
+    font-family: Calibri, Arial, sans-serif;
+    font-size: 12pt;
+    line-height: 1.5;
+  }
   h1 { font-size: 16pt; }
-</style>
-</head>
-<body>
-<h1>${title.replace(/</g, "").replace(/>/g, "")}</h1>
-<p>${escaped}</p>
-</body>
-</html>`;
+  </style>
+  </head>
+  <body>
+  <h1>${safeTitle}</h1>
+  <p>${escaped}</p>
+  </body>
+  </html>`;
 }
+
 
 export function PdfToWord() {
   const { toast } = useToast();
