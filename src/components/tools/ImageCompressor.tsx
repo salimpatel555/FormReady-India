@@ -19,6 +19,7 @@ export function ImageCompressor() {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [resultBlob, setResultBlob] = useState<Blob | null>(null);
   const [resultQuality, setResultQuality] = useState<number | null>(null);
+  const [resultExt, setResultExt] = useState<"jpg" | "webp">("jpg");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
@@ -39,6 +40,20 @@ export function ImageCompressor() {
     };
   }, [previewUrl]);
 
+  const resetResult = () => {
+    setResultBlob(null);
+    setResultQuality(null);
+    setPreviewUrl(null);
+    setError(null);
+    setWarning(null);
+  };
+
+  const handleSelect = (f: File) => {
+    resetResult();
+    setInfo(null);
+    setFile(f);
+  };
+
   const processImage = useCallback(async () => {
     if (!file) return;
     setLoading(true);
@@ -52,15 +67,18 @@ export function ImageCompressor() {
         format,
       });
 
-      if (previewUrl) URL.revokeObjectURL(previewUrl);
       const url = URL.createObjectURL(result.blob);
       setPreviewUrl(url);
       setResultBlob(result.blob);
       setResultQuality(result.quality);
+      // Safari can't encode WebP on canvas and silently returns PNG, so trust the real blob type.
+      setResultExt(result.blob.type === "image/webp" ? "webp" : "jpg");
 
-      if (targetKB !== "" && result.blob.size / 1024 > Number(targetKB)) {
+      if (format === "image/webp" && result.blob.type !== "image/webp") {
+        setWarning("Your browser can't create WebP images, so a JPEG-compatible result was produced instead. Choose JPEG for best results.");
+      } else if (targetKB !== "" && result.blob.size / 1024 > Number(targetKB)) {
         setWarning(
-          `Could not reach the target size of ${targetKB} KB without excessive quality loss. Current size is ${formatBytes(result.blob.size)}. Try a higher target or a smaller original image.`
+          `Could not reach the target size of ${targetKB} KB even after reducing quality and dimensions. Current size is ${formatBytes(result.blob.size)}. Try a higher target.`
         );
       }
     } catch (err) {
@@ -68,33 +86,29 @@ export function ImageCompressor() {
     } finally {
       setLoading(false);
     }
-  }, [file, targetKB, quality, maxDimension, format, previewUrl]);
+  }, [file, targetKB, quality, maxDimension, format]);
 
   const handleDownload = () => {
     if (!resultBlob || !file) return;
-    const ext = format === "image/jpeg" ? "jpg" : "webp";
     const baseName = file.name.replace(/\.[^.]+$/, "");
-    downloadBlob(resultBlob, `${baseName}_compressed.${ext}`);
+    downloadBlob(resultBlob, `${baseName}_compressed.${resultExt}`);
     toast("Compressed image downloaded");
   };
 
   const handleClear = () => {
     setFile(null);
     setInfo(null);
-    setResultBlob(null);
-    setResultQuality(null);
-    if (previewUrl) URL.revokeObjectURL(previewUrl);
-    setPreviewUrl(null);
-    setError(null);
-    setWarning(null);
+    resetResult();
   };
+
+  const reduction = info && resultBlob ? ((info.size - resultBlob.size) / info.size) * 100 : 0;
 
   return (
     <div className="space-y-8">
       <section>
         <h2 className="text-lg font-semibold text-foreground mb-3">1. Upload Image</h2>
         <UploadZone
-          onFileSelect={setFile}
+          onFileSelect={handleSelect}
           currentFile={file}
           onClear={handleClear}
         />
@@ -121,7 +135,7 @@ export function ImageCompressor() {
               <input
                 id="target-kb"
                 type="number"
-                min={10}
+                min={5}
                 max={5000}
                 placeholder="e.g. 50"
                 value={targetKB}
@@ -131,7 +145,7 @@ export function ImageCompressor() {
                 className="w-full rounded-lg border border-border bg-background text-foreground px-3 py-2 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
               />
               <p className="mt-1 text-xs text-muted-foreground">
-                Leave empty to use quality slider only.
+                Leave empty to use quality slider only. If needed, dimensions are reduced to hit the target.
               </p>
             </div>
             <div>
@@ -144,7 +158,7 @@ export function ImageCompressor() {
                 min={100}
                 max={4000}
                 value={maxDimension}
-                onChange={(e) => setMaxDimension(Math.max(100, parseInt(e.target.value) || 100))}
+                onChange={(e) => setMaxDimension(Math.min(4000, Math.max(100, parseInt(e.target.value) || 100)))}
                 className="w-full rounded-lg border border-border bg-background text-foreground px-3 py-2 text-sm"
               />
             </div>
@@ -240,7 +254,7 @@ export function ImageCompressor() {
                 </dd>
                 <dt className="text-muted-foreground">Reduction</dt>
                 <dd className="font-medium">
-                  {(((info.size - resultBlob.size) / info.size) * 100).toFixed(1)}%
+                  {reduction > 0 ? `${reduction.toFixed(1)}%` : "— (output is not smaller than the original)"}
                 </dd>
                 {resultQuality !== null && (
                   <>

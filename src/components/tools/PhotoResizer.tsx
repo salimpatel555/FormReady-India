@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { UploadZone } from "./UploadZone";
 import { resizeImage, getImageInfo, type ImageInfo } from "@/lib/image-processing/resize";
-import { formatBytes, downloadBlob, cn } from "@/lib/utils";
+import { formatBytes, downloadBlob } from "@/lib/utils";
 import { useToast } from "@/components/ui/Toast";
 import { Download, AlertCircle, CheckCircle2 } from "lucide-react";
 import { Loader } from "@/components/ui/Loader";
@@ -32,7 +32,7 @@ export function PhotoResizer({
   const [format, setFormat] = useState<"image/jpeg" | "image/png">("image/jpeg");
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [resultBlob, setResultBlob] = useState<Blob | null>(null);
-  const [resultInfo, setResultInfo] = useState<{ width: number; height: number; size: number } | null>(null);
+  const [resultInfo, setResultInfo] = useState<{ width: number; height: number; size: number; ext: string } | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -54,6 +54,19 @@ export function PhotoResizer({
     };
   }, [previewUrl]);
 
+  const resetResult = () => {
+    setResultBlob(null);
+    setResultInfo(null);
+    setPreviewUrl(null);
+    setError(null);
+  };
+
+  const handleSelect = (f: File) => {
+    resetResult();
+    setInfo(null);
+    setFile(f);
+  };
+
   const processImage = useCallback(async () => {
     if (!file) return;
     setLoading(true);
@@ -69,7 +82,6 @@ export function PhotoResizer({
         backgroundColor: "#ffffff",
       });
 
-      if (previewUrl) URL.revokeObjectURL(previewUrl);
       const url = URL.createObjectURL(result.blob);
       setPreviewUrl(url);
       setResultBlob(result.blob);
@@ -77,30 +89,26 @@ export function PhotoResizer({
         width: result.width,
         height: result.height,
         size: result.blob.size,
+        ext: format === "image/jpeg" ? "jpg" : "png",
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Processing failed");
     } finally {
       setLoading(false);
     }
-  }, [file, width, height, maintainAspect, crop, quality, format, previewUrl]);
+  }, [file, width, height, maintainAspect, crop, quality, format]);
 
   const handleDownload = () => {
-    if (!resultBlob || !file) return;
-    const ext = format === "image/jpeg" ? "jpg" : "png";
+    if (!resultBlob || !file || !resultInfo) return;
     const baseName = file.name.replace(/\.[^.]+$/, "");
-    downloadBlob(resultBlob, `${baseName}_${width}x${height}.${ext}`);
+    downloadBlob(resultBlob, `${baseName}_${resultInfo.width}x${resultInfo.height}.${resultInfo.ext}`);
     toast("Photo downloaded successfully");
   };
 
   const handleClear = () => {
     setFile(null);
     setInfo(null);
-    setResultBlob(null);
-    setResultInfo(null);
-    if (previewUrl) URL.revokeObjectURL(previewUrl);
-    setPreviewUrl(null);
-    setError(null);
+    resetResult();
   };
 
   return (
@@ -109,7 +117,7 @@ export function PhotoResizer({
       <section>
         <h2 className="text-lg font-semibold text-foreground mb-3">1. Upload Photo</h2>
         <UploadZone
-          onFileSelect={setFile}
+          onFileSelect={handleSelect}
           currentFile={file}
           onClear={handleClear}
         />
@@ -140,7 +148,7 @@ export function PhotoResizer({
                 min={1}
                 max={10000}
                 value={width}
-                onChange={(e) => setWidth(Math.max(1, parseInt(e.target.value) || 1))}
+                onChange={(e) => setWidth(Math.min(10000, Math.max(1, parseInt(e.target.value) || 1)))}
                 className="w-full rounded-lg border border-border bg-background text-foreground px-3 py-2 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
               />
             </div>
@@ -154,7 +162,7 @@ export function PhotoResizer({
                 min={1}
                 max={10000}
                 value={height}
-                onChange={(e) => setHeight(Math.max(1, parseInt(e.target.value) || 1))}
+                onChange={(e) => setHeight(Math.min(10000, Math.max(1, parseInt(e.target.value) || 1)))}
                 className="w-full rounded-lg border border-border bg-background text-foreground px-3 py-2 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
               />
             </div>
@@ -171,7 +179,7 @@ export function PhotoResizer({
                 }}
                 className="rounded border-border text-indigo-600 focus:ring-indigo-500"
               />
-              Maintain aspect ratio
+              Maintain aspect ratio (output may be smaller than the exact size)
             </label>
             {showCropOption && (
               <label className="flex items-center gap-2 text-sm text-foreground/90">
