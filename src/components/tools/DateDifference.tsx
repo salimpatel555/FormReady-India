@@ -1,11 +1,14 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { todayLocalISO } from "@/lib/utils";
 
 export function DateDifference() {
-  const today = new Date().toISOString().slice(0, 10);
   const [from, setFrom] = useState("");
-  const [to, setTo] = useState(today);
+  const [to, setTo] = useState("");
+  useEffect(() => {
+    setTo(todayLocalISO());
+  }, []);
 
   const result = useMemo(() => {
     if (!from || !to) return null;
@@ -13,7 +16,7 @@ export function DateDifference() {
     const b = new Date(to + "T00:00:00");
     if (isNaN(a.getTime()) || isNaN(b.getTime())) return null;
     const ms = Math.abs(b.getTime() - a.getTime());
-    const days = Math.floor(ms / 86400000);
+    const days = Math.round(ms / 86400000);
     const weeks = Math.floor(days / 7);
     const monthsApprox = Math.floor(days / 30.44);
     const yearsApprox = Math.floor(days / 365.25);

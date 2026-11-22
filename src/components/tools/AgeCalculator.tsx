@@ -1,34 +1,48 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Calendar } from "lucide-react";
+import { todayLocalISO } from "@/lib/utils";
 
 function calcAge(dob: string, asOf: string) {
   const birth = new Date(dob + "T00:00:00");
   const end = new Date(asOf + "T00:00:00");
   if (isNaN(birth.getTime()) || isNaN(end.getTime()) || end < birth) return null;
+
   let years = end.getFullYear() - birth.getFullYear();
   let months = end.getMonth() - birth.getMonth();
   let days = end.getDate() - birth.getDate();
-  if (days < 0) {
+
+  // Borrow days from previous months until non-negative (handles month-end dates like 31 Jan -> 1 Mar).
+  let borrowYear = end.getFullYear();
+  let borrowMonth = end.getMonth();
+  while (days < 0) {
     months -= 1;
-    const prev = new Date(end.getFullYear(), end.getMonth(), 0);
-    days += prev.getDate();
+    borrowMonth -= 1;
+    if (borrowMonth < 0) {
+      borrowMonth = 11;
+      borrowYear -= 1;
+    }
+    days += new Date(borrowYear, borrowMonth + 1, 0).getDate();
   }
   if (months < 0) {
     years -= 1;
     months += 12;
   }
-  const totalDays = Math.floor((end.getTime() - birth.getTime()) / 86400000);
+  const totalDays = Math.round((end.getTime() - birth.getTime()) / 86400000);
   return { years, months, days, totalDays };
 }
 
 export function AgeCalculator() {
-  const today = new Date().toISOString().slice(0, 10);
   const [dob, setDob] = useState("");
-  const [asOf, setAsOf] = useState(today);
+  // Set after mount (local date) to avoid a server/client hydration mismatch and UTC off-by-one.
+  const [asOf, setAsOf] = useState("");
+  useEffect(() => {
+    setAsOf(todayLocalISO());
+  }, []);
 
-  const result = useMemo(() => (dob ? calcAge(dob, asOf) : null), [dob, asOf]);
+  const result = useMemo(() => (dob && asOf ? calcAge(dob, asOf) : null), [dob, asOf]);
+  const invalidRange = dob && asOf && !result;
 
   return (
     <div className="space-y-8">
@@ -47,6 +61,11 @@ export function AgeCalculator() {
           <Calendar className="h-3.5 w-3.5" />
           Use the cut-off date from the official notification for eligibility checks.
         </p>
+        {invalidRange && (
+          <p className="text-sm text-red-600" role="alert">
+            The “age as on” date must be on or after the date of birth.
+          </p>
+        )}
       </section>
 
       {result && (
