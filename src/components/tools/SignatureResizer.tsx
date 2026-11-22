@@ -13,9 +13,10 @@ export function SignatureResizer() {
   const [height, setHeight] = useState(60);
   const [quality, setQuality] = useState(0.92);
   const [format, setFormat] = useState<"image/jpeg" | "image/png">("image/jpeg");
+  const [cropToFill, setCropToFill] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [resultBlob, setResultBlob] = useState<Blob | null>(null);
-  const [resultInfo, setResultInfo] = useState<{ width: number; height: number; size: number } | null>(null);
+  const [resultInfo, setResultInfo] = useState<{ width: number; height: number; size: number; ext: string } | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -35,23 +36,37 @@ export function SignatureResizer() {
     };
   }, [previewUrl]);
 
+  const resetResult = () => {
+    setResultBlob(null);
+    setResultInfo(null);
+    setPreviewUrl(null);
+    setError(null);
+  };
+
+  const handleSelect = (f: File) => {
+    resetResult();
+    setInfo(null);
+    setFile(f);
+  };
+
   const processImage = useCallback(async () => {
     if (!file) return;
     setLoading(true);
     setError(null);
     try {
-      // For signatures we typically want exact size with white background and center crop
+      // Default: fit the whole signature inside the exact size on a white background (nothing gets cut off).
+      // Optional: center-crop to fill the exact size.
       const result = await resizeImage(file, {
         width,
         height,
         maintainAspectRatio: false,
-        crop: true,
+        crop: cropToFill,
+        contain: !cropToFill,
         quality,
         format,
         backgroundColor: "#ffffff",
       });
 
-      if (previewUrl) URL.revokeObjectURL(previewUrl);
       const url = URL.createObjectURL(result.blob);
       setPreviewUrl(url);
       setResultBlob(result.blob);
@@ -59,29 +74,25 @@ export function SignatureResizer() {
         width: result.width,
         height: result.height,
         size: result.blob.size,
+        ext: format === "image/jpeg" ? "jpg" : "png",
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Processing failed");
     } finally {
       setLoading(false);
     }
-  }, [file, width, height, quality, format, previewUrl]);
+  }, [file, width, height, quality, format, cropToFill]);
 
   const handleDownload = () => {
-    if (!resultBlob || !file) return;
-    const ext = format === "image/jpeg" ? "jpg" : "png";
+    if (!resultBlob || !file || !resultInfo) return;
     const baseName = file.name.replace(/\.[^.]+$/, "");
-    downloadBlob(resultBlob, `${baseName}_signature_${width}x${height}.${ext}`);
+    downloadBlob(resultBlob, `${baseName}_signature_${resultInfo.width}x${resultInfo.height}.${resultInfo.ext}`);
   };
 
   const handleClear = () => {
     setFile(null);
     setInfo(null);
-    setResultBlob(null);
-    setResultInfo(null);
-    if (previewUrl) URL.revokeObjectURL(previewUrl);
-    setPreviewUrl(null);
-    setError(null);
+    resetResult();
   };
 
   return (
@@ -89,7 +100,7 @@ export function SignatureResizer() {
       <section>
         <h2 className="text-lg font-semibold text-foreground mb-3">1. Upload Signature</h2>
         <UploadZone
-          onFileSelect={setFile}
+          onFileSelect={handleSelect}
           currentFile={file}
           onClear={handleClear}
         />
@@ -120,7 +131,7 @@ export function SignatureResizer() {
                 min={1}
                 max={2000}
                 value={width}
-                onChange={(e) => setWidth(Math.max(1, parseInt(e.target.value) || 1))}
+                onChange={(e) => setWidth(Math.min(2000, Math.max(1, parseInt(e.target.value) || 1)))}
                 className="w-full rounded-lg border border-border bg-background text-foreground px-3 py-2 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
               />
             </div>
@@ -134,7 +145,7 @@ export function SignatureResizer() {
                 min={1}
                 max={1000}
                 value={height}
-                onChange={(e) => setHeight(Math.max(1, parseInt(e.target.value) || 1))}
+                onChange={(e) => setHeight(Math.min(1000, Math.max(1, parseInt(e.target.value) || 1)))}
                 className="w-full rounded-lg border border-border bg-background text-foreground px-3 py-2 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
               />
             </div>
@@ -174,8 +185,18 @@ export function SignatureResizer() {
             )}
           </div>
 
+          <label className="mt-4 flex items-center gap-2 text-sm text-foreground/90">
+            <input
+              type="checkbox"
+              checked={cropToFill}
+              onChange={(e) => setCropToFill(e.target.checked)}
+              className="rounded border-border text-indigo-600 focus:ring-indigo-500"
+            />
+            Crop to fill the exact size (may cut off the edges of the signature)
+          </label>
+
           <p className="mt-3 text-xs text-muted-foreground">
-            A white background is automatically applied. The signature is center-cropped to the exact dimensions.
+            A white background is applied. By default the whole signature is kept and centred inside the exact dimensions.
           </p>
 
           <button

@@ -2,7 +2,37 @@
 
 import { useState, useCallback } from "react";
 import { Upload, X, FileText, Loader2, Download, AlertCircle } from "lucide-react";
-import { downloadBlob, formatBytes, cn } from "@/lib/utils";
+import { downloadBlob, formatBytes } from "@/lib/utils";
+
+/** jsPDF can only embed what we tell it, so always re-encode to JPEG on a white background (handles PNG/WebP/transparency). */
+async function fileToJpeg(file: File): Promise<{ dataUrl: string; width: number; height: number }> {
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const image = new Image();
+      image.onload = () => resolve(image);
+      image.onerror = () => reject(new Error(`Could not read "${file.name}". The image may be corrupted.`));
+      image.src = url;
+    });
+    const canvas = document.createElement("canvas");
+    canvas.width = img.naturalWidth;
+    canvas.height = img.naturalHeight;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("Canvas not supported in this browser.");
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(img, 0, 0);
+    return {
+      dataUrl: canvas.toDataURL("image/jpeg", 0.92),
+      width: canvas.width,
+      height: canvas.height,
+    };
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+const ACCEPTED = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
 
 export function ImageToPdf() {
   const [files, setFiles] = useState<File[]>([]);
@@ -11,14 +41,13 @@ export function ImageToPdf() {
   const [pageSize, setPageSize] = useState<"a4" | "letter" | "fit">("a4");
 
   const addFiles = useCallback((newFiles: FileList | File[]) => {
-    const valid = Array.from(newFiles).filter((f) =>
-      ["image/jpeg", "image/jpg", "image/png", "image/webp"].includes(f.type)
-    );
+    const all = Array.from(newFiles);
+    const valid = all.filter((f) => ACCEPTED.includes(f.type));
     if (valid.length === 0) {
       setError("Please select JPG, PNG or WebP images.");
       return;
     }
-    setError(null);
+    setError(valid.length < all.length ? `${all.length - valid.length} unsupported file(s) were skipped.` : null);
     setFiles((prev) => [...prev, ...valid].slice(0, 20)); // max 20 images
   }, []);
 
@@ -43,23 +72,7 @@ export function ImageToPdf() {
       let pdf: InstanceType<typeof jsPDF> | null = null;
 
       for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        const dataUrl = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result as string);
-          reader.onerror = reject;
-          reader.readAsDataURL(file);
-        });
-
-        const img = await new Promise<HTMLImageElement>((resolve, reject) => {
-          const image = new Image();
-          image.onload = () => resolve(image);
-          image.onerror = reject;
-          image.src = dataUrl;
-        });
-
-        const imgW = img.naturalWidth;
-        const imgH = img.naturalHeight;
+        const { dataUrl, width: imgW, height: imgH } = await fileToJpeg(files[i]);
 
         if (pageSize === "fit") {
           // One page per image, sized to the image (in mm, assuming 96 DPI for simplicity)
@@ -124,7 +137,10 @@ export function ImageToPdf() {
             type="file"
             accept="image/jpeg,image/jpg,image/png,image/webp"
             multiple
-            onChange={(e) => e.target.files && addFiles(e.target.files)}
+            onChange={(e) => {
+              if (e.target.files) addFiles(e.target.files);
+              e.target.value = "";
+            }}
             className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
           />
           <div className="pointer-events-none flex flex-col items-center gap-2">
@@ -138,7 +154,7 @@ export function ImageToPdf() {
           <ul className="mt-4 space-y-2">
             {files.map((f, i) => (
               <li
-                key={`${f.name}-${i}`}
+                key={`${f.name}-${f.size}-${i}`}
                 className="flex items-center gap-3 rounded-lg border border-border bg-card px-3 py-2 text-sm"
               >
                 <FileText className="h-4 w-4 text-muted-foreground shrink-0" />

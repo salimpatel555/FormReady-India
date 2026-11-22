@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { Upload, X, FileText, Loader2, Download, AlertCircle, GripVertical } from "lucide-react";
-import { downloadBlob, formatBytes } from "@/lib/utils";
+import { Upload, X, FileText, Loader2, Download, AlertCircle } from "lucide-react";
+import { downloadBlob, formatBytes, isPdfFile } from "@/lib/utils";
 
 export function PdfMerge() {
   const [files, setFiles] = useState<File[]>([]);
@@ -10,12 +10,17 @@ export function PdfMerge() {
   const [error, setError] = useState<string | null>(null);
 
   const addFiles = useCallback((newFiles: FileList | File[]) => {
-    const valid = Array.from(newFiles).filter((f) => f.type === "application/pdf");
+    const all = Array.from(newFiles);
+    const valid = all.filter(isPdfFile);
     if (valid.length === 0) {
       setError("Please select PDF files only.");
       return;
     }
-    setError(null);
+    setError(
+      valid.length < all.length
+        ? `${all.length - valid.length} non-PDF file(s) were skipped.`
+        : null
+    );
     setFiles((prev) => [...prev, ...valid].slice(0, 20));
   }, []);
 
@@ -45,8 +50,16 @@ export function PdfMerge() {
       const merged = await PDFDocument.create();
 
       for (const file of files) {
-        const bytes = await file.arrayBuffer();
-        const doc = await PDFDocument.load(bytes, { ignoreEncryption: true });
+        let doc;
+        try {
+          const bytes = await file.arrayBuffer();
+          // Encrypted PDFs are rejected (ignoring encryption would produce a broken merged file).
+          doc = await PDFDocument.load(bytes);
+        } catch {
+          throw new Error(
+            `Could not read "${file.name}". It may be password-protected or corrupted. Remove it and try again.`
+          );
+        }
         const pages = await merged.copyPages(doc, doc.getPageIndices());
         pages.forEach((page) => merged.addPage(page));
       }
@@ -80,9 +93,12 @@ export function PdfMerge() {
         >
           <input
             type="file"
-            accept="application/pdf"
+            accept="application/pdf,.pdf"
             multiple
-            onChange={(e) => e.target.files && addFiles(e.target.files)}
+            onChange={(e) => {
+              if (e.target.files) addFiles(e.target.files);
+              e.target.value = "";
+            }}
             className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
           />
           <div className="pointer-events-none flex flex-col items-center gap-2">
@@ -96,7 +112,7 @@ export function PdfMerge() {
           <ul className="mt-4 space-y-2">
             {files.map((f, i) => (
               <li
-                key={`${f.name}-${i}`}
+                key={`${f.name}-${f.size}-${i}`}
                 className="flex items-center gap-3 rounded-lg border border-border bg-card px-3 py-2 text-sm"
               >
                 <span className="text-muted-foreground font-mono text-xs w-5">{i + 1}</span>
@@ -110,6 +126,7 @@ export function PdfMerge() {
                       onClick={() => moveFile(i, i - 1)}
                       className="p-1 text-muted-foreground hover:text-indigo-600"
                       title="Move up"
+                      aria-label="Move up"
                     >
                       ↑
                     </button>
@@ -120,6 +137,7 @@ export function PdfMerge() {
                       onClick={() => moveFile(i, i + 1)}
                       className="p-1 text-muted-foreground hover:text-indigo-600"
                       title="Move down"
+                      aria-label="Move down"
                     >
                       ↓
                     </button>

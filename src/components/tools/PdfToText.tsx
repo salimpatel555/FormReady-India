@@ -1,22 +1,27 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState } from "react";
 import { Upload, FileText, Copy, Download, AlertCircle, X, Check } from "lucide-react";
 import { useToast } from "@/components/ui/Toast";
 import { Loader } from "@/components/ui/Loader";
-import { downloadBlob, formatBytes } from "@/lib/utils";
+import { downloadBlob, formatBytes, isPdfFile } from "@/lib/utils";
+import { loadPdfjs, pdfErrorMessage } from "@/lib/pdf-worker";
 
 async function extractPdfText(file: File): Promise<string> {
-  const pdfjs = await import("pdfjs-dist");
-  pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
+  const pdfjs = await loadPdfjs();
   const data = new Uint8Array(await file.arrayBuffer());
   const pdf = await pdfjs.getDocument({ data }).promise;
   const parts: string[] = [];
   for (let i = 1; i <= pdf.numPages; i++) {
     const page = await pdf.getPage(i);
     const content = await page.getTextContent();
-    const line = content.items.map((item) => ("str" in item ? item.str : "")).join(" ");
-    parts.push(`--- Page ${i} ---\n${line.trim()}`);
+    let line = "";
+    for (const item of content.items) {
+      if ("str" in item) {
+        line += item.str + (item.hasEOL ? "\n" : " ");
+      }
+    }
+    parts.push(`--- Page ${i} ---\n${line.replace(/[ \t]+\n/g, "\n").trim()}`);
   }
   return parts.join("\n\n");
 }
@@ -28,6 +33,17 @@ export function PdfToText() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+
+  const onFile = (f: File | null) => {
+    setText("");
+    setError(null);
+    if (f && !isPdfFile(f)) {
+      setFile(null);
+      setError("Please upload a PDF file.");
+      return;
+    }
+    setFile(f);
+  };
 
   const convert = async () => {
     if (!file) return;
@@ -43,17 +59,22 @@ export function PdfToText() {
       setText(extracted);
       toast("Text extracted");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Extraction failed");
+      console.error(e);
+      setError(pdfErrorMessage(e, "Extraction failed"));
     } finally {
       setLoading(false);
     }
   };
 
   const copy = async () => {
-    await navigator.clipboard.writeText(text);
-    setCopied(true);
-    toast("Copied to clipboard");
-    setTimeout(() => setCopied(false), 2000);
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      toast("Copied to clipboard");
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      toast("Could not copy. Select the text and copy manually.", "error");
+    }
   };
 
   return (
@@ -62,8 +83,8 @@ export function PdfToText() {
         <h2 className="text-lg font-semibold text-foreground mb-3">1. Upload PDF</h2>
         {!file ? (
           <label className="relative flex cursor-pointer flex-col items-center gap-2 rounded-xl border-2 border-dashed border-border bg-muted/50 p-10 text-center hover:border-indigo-400">
-            <input type="file" accept="application/pdf" className="absolute inset-0 opacity-0 cursor-pointer"
-              onChange={(e) => { setFile(e.target.files?.[0] || null); setText(""); setError(null); }} />
+            <input type="file" accept="application/pdf,.pdf" className="absolute inset-0 opacity-0 cursor-pointer"
+              onChange={(e) => { onFile(e.target.files?.[0] || null); e.target.value = ""; }} />
             <Upload className="h-8 w-8 text-indigo-600" />
             <span className="font-medium">Drop a PDF or click to browse</span>
           </label>
@@ -74,7 +95,7 @@ export function PdfToText() {
               <p className="truncate text-sm font-medium">{file.name}</p>
               <p className="text-xs text-muted-foreground">{formatBytes(file.size)}</p>
             </div>
-            <button type="button" onClick={() => { setFile(null); setText(""); }} className="p-1 text-muted-foreground" aria-label="Remove">
+            <button type="button" onClick={() => onFile(null)} className="p-1 text-muted-foreground" aria-label="Remove">
               <X className="h-4 w-4" />
             </button>
           </div>
@@ -101,7 +122,7 @@ export function PdfToText() {
               {copied ? <Check className="h-4 w-4 text-green-600" /> : <Copy className="h-4 w-4" />}
               {copied ? "Copied" : "Copy"}
             </button>
-            <button type="button" onClick={() => downloadBlob(new Blob([text], { type: "text/plain" }), (file?.name || "pdf").replace(/\.pdf$/i, "") + ".txt")}
+            <button type="button" onClick={() => downloadBlob(new Blob(["\ufeff", text], { type: "text/plain;charset=utf-8" }), (file?.name || "pdf").replace(/\.pdf$/i, "") + ".txt")}
               className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white">
               <Download className="h-4 w-4" /> Download .txt
             </button>

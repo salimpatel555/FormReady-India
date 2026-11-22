@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
-import { Upload, X, FileText, Loader2, Download, AlertCircle, Image as ImageIcon } from "lucide-react";
-import { downloadBlob, formatBytes, cn } from "@/lib/utils";
+import { useState, useCallback } from "react";
+import { Upload, X, FileText, Loader2, Download, AlertCircle } from "lucide-react";
+import { downloadBlob, formatBytes, cn, isPdfFile } from "@/lib/utils";
+import { loadPdfjs, pdfErrorMessage } from "@/lib/pdf-worker";
 
 interface PageImage {
   pageNum: number;
@@ -17,21 +18,14 @@ export function PdfToImage() {
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
-  const [scale, setScale] = useState(2); // 2 = ~144-150 DPI equivalent for screen, higher = better quality
+  const [scale, setScale] = useState(2); // 2 = ~144 DPI; higher = better quality
   const [format, setFormat] = useState<"image/png" | "image/jpeg">("image/png");
+  // Format the current results were rendered with (the dropdown can change afterwards).
+  const [resultFormat, setResultFormat] = useState<"image/png" | "image/jpeg">("image/png");
   const [selectedPages, setSelectedPages] = useState<Set<number>>(new Set());
 
-  // Cleanup object URLs
-  useEffect(() => {
-    return () => {
-      pages.forEach((p) => {
-        if (p.dataUrl.startsWith("blob:")) URL.revokeObjectURL(p.dataUrl);
-      });
-    };
-  }, [pages]);
-
   const handleFile = useCallback((f: File) => {
-    if (f.type !== "application/pdf") {
+    if (!isPdfFile(f)) {
       setError("Please upload a PDF file.");
       return;
     }
@@ -54,11 +48,7 @@ export function PdfToImage() {
     setProgress(0);
 
     try {
-      // Dynamic import – keeps initial bundle smaller
-      const pdfjs = await import("pdfjs-dist");
-
-      // Use the worker from the same version (CDN for reliability in browser)
-      pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.mjs`;
+      const pdfjs = await loadPdfjs();
 
       const arrayBuffer = await file.arrayBuffer();
       const pdf = await pdfjs.getDocument({ data: arrayBuffer }).promise;
@@ -75,10 +65,14 @@ export function PdfToImage() {
         const viewport = page.getViewport({ scale });
 
         const canvas = document.createElement("canvas");
-        canvas.width = viewport.width;
-        canvas.height = viewport.height;
+        canvas.width = Math.floor(viewport.width);
+        canvas.height = Math.floor(viewport.height);
         const ctx = canvas.getContext("2d");
         if (!ctx) throw new Error("Canvas not supported");
+
+        // PDF pages are transparent by default; without this JPEG output turns black.
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
 
         await page.render({
           canvasContext: ctx,
@@ -90,22 +84,19 @@ export function PdfToImage() {
         results.push({
           pageNum: i,
           dataUrl,
-          width: Math.round(viewport.width),
-          height: Math.round(viewport.height),
+          width: canvas.width,
+          height: canvas.height,
         });
 
         setProgress(Math.round((i / numPages) * 100));
       }
 
+      setResultFormat(format);
       setPages(results);
       setSelectedPages(new Set(results.map((r) => r.pageNum)));
     } catch (err) {
       console.error(err);
-      setError(
-        err instanceof Error
-          ? err.message
-          : "Failed to convert PDF. The file may be corrupted or password-protected."
-      );
+      setError(pdfErrorMessage(err, "Failed to convert PDF. The file may be corrupted or password-protected."));
     } finally {
       setLoading(false);
     }
@@ -120,25 +111,25 @@ export function PdfToImage() {
     });
   };
 
-  const downloadPage = (page: PageImage) => {
-    const ext = format === "image/png" ? "png" : "jpg";
-    fetch(page.dataUrl)
-      .then((r) => r.blob())
-      .then((blob) => {
-        downloadBlob(blob, `page-${page.pageNum}.${ext}`);
-      });
+  const baseName = () => (file?.name || "document").replace(/\.pdf$/i, "");
+  const ext = () => (resultFormat === "image/png" ? "png" : "jpg");
+
+  const downloadPage = async (page: PageImage) => {
+    try {
+      const blob = await fetch(page.dataUrl).then((r) => r.blob());
+      downloadBlob(blob, `${baseName()}-page-${page.pageNum}.${ext()}`);
+    } catch {
+      setError("Download failed. Please try again.");
+    }
   };
 
   const downloadSelected = async () => {
     const selected = pages.filter((p) => selectedPages.has(p.pageNum));
     if (selected.length === 0) return;
 
-    const ext = format === "image/png" ? "png" : "jpg";
-
     // Download one by one with a small delay to avoid browser blocking
     for (const page of selected) {
-      const blob = await fetch(page.dataUrl).then((r) => r.blob());
-      downloadBlob(blob, `page-${page.pageNum}.${ext}`);
+      await downloadPage(page);
       await new Promise((r) => setTimeout(r, 300));
     }
   };
@@ -168,8 +159,11 @@ export function PdfToImage() {
           >
             <input
               type="file"
-              accept="application/pdf"
-              onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
+              accept="application/pdf,.pdf"
+              onChange={(e) => {
+                if (e.target.files?.[0]) handleFile(e.target.files[0]);
+                e.target.value = "";
+              }}
               className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
             />
             <div className="pointer-events-none flex flex-col items-center gap-2">
@@ -198,7 +192,7 @@ export function PdfToImage() {
       </section>
 
       {/* Settings */}
-      {file && pages.length === 0 && !loading && (
+      {file && !loading && (
         <section className="rounded-xl border border-border bg-muted/50 p-6 space-y-4">
           <h2 className="text-lg font-semibold text-foreground">2. Conversion Settings</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -237,7 +231,7 @@ export function PdfToImage() {
             onClick={convertPdf}
             className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500"
           >
-            Convert to Images
+            {pages.length > 0 ? "Convert again with these settings" : "Convert to Images"}
           </button>
         </section>
       )}

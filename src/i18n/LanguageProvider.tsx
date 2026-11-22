@@ -15,6 +15,9 @@ import en from "@/messages/en.json";
 
 type Messages = typeof en;
 
+/** Right-to-left scripts (Urdu, Sindhi, Kashmiri). */
+const RTL_LOCALES: readonly string[] = ["ur", "sd", "ks"];
+
 interface LanguageContextValue {
   locale: Locale;
   setLocale: (locale: Locale) => void;
@@ -24,14 +27,13 @@ interface LanguageContextValue {
 
 const LanguageContext = createContext<LanguageContextValue | null>(null);
 
-function getNested(obj: Record<string, unknown>, path: string): string {
-  const parts = path.split(".");
+function lookup(obj: Record<string, unknown>, path: string): string | undefined {
   let current: unknown = obj;
-  for (const part of parts) {
-    if (current == null || typeof current !== "object") return path;
+  for (const part of path.split(".")) {
+    if (current == null || typeof current !== "object") return undefined;
     current = (current as Record<string, unknown>)[part];
   }
-  return typeof current === "string" ? current : path;
+  return typeof current === "string" ? current : undefined;
 }
 
 export function LanguageProvider({ children }: { children: ReactNode }) {
@@ -55,10 +57,13 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
     } catch {
       // ignore
     }
-    if (typeof document !== "undefined") {
-      document.documentElement.lang = next === "en" ? "en" : next;
-    }
   }, []);
+
+  // Keep <html lang> and text direction in sync (also when restored from localStorage).
+  useEffect(() => {
+    document.documentElement.lang = locale;
+    document.documentElement.dir = RTL_LOCALES.includes(locale) ? "rtl" : "ltr";
+  }, [locale]);
 
   // English ships with the page; other languages load on demand so the first load stays small.
   const [loaded, setLoaded] = useState<{ locale: string; data: Messages }>({ locale: "en", data: en });
@@ -83,8 +88,12 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
 
   const messages = loaded.data;
 
+  // Missing keys in a translation fall back to English instead of showing the raw key.
   const t = useCallback(
-    (key: string) => getNested(messages as unknown as Record<string, unknown>, key),
+    (key: string) =>
+      lookup(messages as unknown as Record<string, unknown>, key) ??
+      lookup(en as unknown as Record<string, unknown>, key) ??
+      key,
     [messages]
   );
 
